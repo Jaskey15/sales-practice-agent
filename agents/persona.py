@@ -48,7 +48,7 @@ class SarahPersona:
         # Call Claude API
         response = self.client.messages.create(
             model=self.model,
-            max_tokens=300,  # Keep responses concise (2-4 sentences)
+            max_tokens=150,  # Shorter responses for faster generation (2-3 sentences)
             temperature=0.7,  # Some variability for natural conversation
             system=self.system_prompt,
             messages=self.conversation_history
@@ -84,7 +84,7 @@ class SarahPersona:
 
         response = self.client.messages.create(
             model=self.model,
-            max_tokens=100,
+            max_tokens=50,  # Very brief greeting
             temperature=0.7,
             system=self.system_prompt,
             messages=[{"role": "user", "content": greeting_prompt}]

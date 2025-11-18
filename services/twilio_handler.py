@@ -41,7 +41,7 @@ class TwilioVoiceHandler:
             input="speech",
             action=f"{self.base_url}/voice/respond",
             method="POST",
-            speech_timeout="2",  # 2 seconds of silence to detect end of speech
+            speech_timeout="1",  # 1 second of silence to detect end of speech
             speech_model="phone_call",  # Optimized for phone calls
             language="en-US",
             action_on_empty_result=True  # Always callback even if no speech detected
@@ -96,7 +96,7 @@ class TwilioVoiceHandler:
                 input="speech",
                 action=f"{self.base_url}/voice/respond",
                 method="POST",
-                speech_timeout="2",
+                speech_timeout="1",
                 speech_model="phone_call",
                 language="en-US",
                 action_on_empty_result=True
@@ -116,7 +116,7 @@ class TwilioVoiceHandler:
                 input="speech",
                 action=f"{self.base_url}/voice/respond",
                 method="POST",
-                speech_timeout="2",
+                speech_timeout="1",
                 speech_model="phone_call",
                 language="en-US",
                 timeout=5,
