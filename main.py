@@ -9,6 +9,7 @@ from typing import Optional, Dict
 
 from config import get_settings
 from agents.persona import SarahPersona
+from agents.coach import SalesCoach
 from services.twilio_handler import TwilioVoiceHandler
 from services.storage import TranscriptStorage
 
@@ -29,6 +30,7 @@ settings = get_settings()
 # Initialize services
 twilio_handler = TwilioVoiceHandler(base_url=settings.base_url)
 storage = TranscriptStorage(storage_dir=settings.transcripts_dir)
+coach = SalesCoach(api_key=settings.anthropic_api_key, model=settings.claude_model)
 
 # Store active call sessions (in production, use Redis or database)
 # Key: call_sid, Value: SarahPersona instance
@@ -266,6 +268,97 @@ async def get_transcript(call_sid: str):
         return {"error": "Transcript not found"}, 404
     except Exception as e:
         logger.error(f"Error loading transcript: {e}", exc_info=True)
+        return {"error": str(e)}, 500
+
+
+@app.post("/coach/analyze/{call_sid}")
+async def analyze_call(call_sid: str):
+    """
+    Analyze a call transcript and generate coaching feedback.
+
+    Args:
+        call_sid: Twilio call identifier
+
+    Returns:
+        Coaching feedback and scores
+    """
+    try:
+        # Load transcript
+        transcript = storage.load_transcript(call_sid)
+        if not transcript:
+            return {"error": "Transcript not found"}, 404
+
+        logger.info(f"Analyzing call {call_sid} with coach...")
+
+        # Analyze with coach
+        conversation = transcript.get("conversation", [])
+        metadata = transcript.get("metadata", {})
+
+        feedback = coach.analyze_call(conversation, metadata)
+
+        # Save feedback
+        feedback_path = storage.save_feedback(call_sid, feedback)
+        logger.info(f"Feedback saved: {feedback_path}")
+
+        return {
+            "call_sid": call_sid,
+            "analysis": feedback,
+            "message": "Analysis complete"
+        }
+
+    except Exception as e:
+        logger.error(f"Error analyzing call: {e}", exc_info=True)
+        return {"error": str(e)}, 500
+
+
+@app.get("/coach/feedback/{call_sid}")
+async def get_feedback(call_sid: str):
+    """
+    Get saved coaching feedback for a call.
+
+    Args:
+        call_sid: Twilio call identifier
+
+    Returns:
+        Saved coaching feedback
+    """
+    try:
+        feedback = storage.load_feedback(call_sid)
+        if feedback:
+            return feedback
+        return {"error": "Feedback not found. Have you analyzed this call yet?"}, 404
+    except Exception as e:
+        logger.error(f"Error loading feedback: {e}", exc_info=True)
+        return {"error": str(e)}, 500
+
+
+@app.get("/coach/summary/{call_sid}")
+async def get_call_summary(call_sid: str):
+    """
+    Get a quick summary of a call.
+
+    Args:
+        call_sid: Twilio call identifier
+
+    Returns:
+        Brief summary of the call
+    """
+    try:
+        # Load transcript
+        transcript = storage.load_transcript(call_sid)
+        if not transcript:
+            return {"error": "Transcript not found"}, 404
+
+        conversation = transcript.get("conversation", [])
+        summary = coach.quick_summary(conversation)
+
+        return {
+            "call_sid": call_sid,
+            "summary": summary
+        }
+
+    except Exception as e:
+        logger.error(f"Error generating summary: {e}", exc_info=True)
         return {"error": str(e)}, 500
 
 
