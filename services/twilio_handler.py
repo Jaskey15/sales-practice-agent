@@ -41,9 +41,10 @@ class TwilioVoiceHandler:
             input="speech",
             action=f"{self.base_url}/voice/respond",
             method="POST",
-            speech_timeout="auto",  # Auto-detect when user stops speaking
+            speech_timeout="2",  # 2 seconds of silence to detect end of speech
             speech_model="phone_call",  # Optimized for phone calls
-            language="en-US"
+            language="en-US",
+            action_on_empty_result=True  # Always callback even if no speech detected
         )
 
         response.append(gather)
@@ -95,9 +96,10 @@ class TwilioVoiceHandler:
                 input="speech",
                 action=f"{self.base_url}/voice/respond",
                 method="POST",
-                speech_timeout="auto",
+                speech_timeout="2",
                 speech_model="phone_call",
-                language="en-US"
+                language="en-US",
+                action_on_empty_result=True
             )
 
             response.append(gather)
@@ -114,10 +116,11 @@ class TwilioVoiceHandler:
                 input="speech",
                 action=f"{self.base_url}/voice/respond",
                 method="POST",
-                speech_timeout="auto",
+                speech_timeout="2",
                 speech_model="phone_call",
                 language="en-US",
-                timeout=5
+                timeout=5,
+                action_on_empty_result=True
             )
 
             response.append(final_gather)
