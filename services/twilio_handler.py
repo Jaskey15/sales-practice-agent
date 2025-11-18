@@ -29,10 +29,10 @@ class TwilioVoiceHandler:
         """
         response = VoiceResponse()
 
-        # Sarah says her greeting
+        # Sarah says her greeting - using neural voice for more natural sound
         response.say(
             greeting_text,
-            voice="Polly.Joanna",  # Natural US English female voice
+            voice="Polly.Ruth-Neural",  # High-quality neural voice (more natural)
             language="en-US"
         )
 
@@ -51,7 +51,7 @@ class TwilioVoiceHandler:
         # If no input, prompt again
         response.say(
             "I didn't catch that. Are you still there?",
-            voice="Polly.Joanna",
+            voice="Polly.Ruth-Neural",
             language="en-US"
         )
 
@@ -77,7 +77,7 @@ class TwilioVoiceHandler:
         # Sarah speaks her response
         response.say(
             sarah_response,
-            voice="Polly.Joanna",
+            voice="Polly.Ruth-Neural",
             language="en-US"
         )
 
@@ -85,7 +85,7 @@ class TwilioVoiceHandler:
             # End the call
             response.say(
                 "Thanks for your time. Goodbye!",
-                voice="Polly.Joanna",
+                voice="Polly.Ruth-Neural",
                 language="en-US"
             )
             response.hangup()
@@ -105,7 +105,7 @@ class TwilioVoiceHandler:
             # If no input after waiting
             response.say(
                 "I didn't hear anything. Are you still there?",
-                voice="Polly.Joanna",
+                voice="Polly.Ruth-Neural",
                 language="en-US"
             )
 
@@ -125,7 +125,7 @@ class TwilioVoiceHandler:
             # If still no input, end call
             response.say(
                 "I'll let you go. Feel free to call back anytime. Goodbye!",
-                voice="Polly.Joanna",
+                voice="Polly.Ruth-Neural",
                 language="en-US"
             )
             response.hangup()
@@ -148,7 +148,7 @@ class TwilioVoiceHandler:
 
         response.say(
             message,
-            voice="Polly.Joanna",
+            voice="Polly.Ruth-Neural",
             language="en-US"
         )
 
