@@ -29,10 +29,10 @@ class TwilioVoiceHandler:
         """
         response = VoiceResponse()
 
-        # Sarah says her greeting - using neural voice for more natural sound
+        # Sarah says her greeting - using Google's most natural voice
         response.say(
             greeting_text,
-            voice="Polly.Ruth-Neural",  # High-quality neural voice (more natural)
+            voice="Google.en-US-Neural2-F",  # Google's high-quality neural voice (very natural)
             language="en-US"
         )
 
@@ -52,7 +52,7 @@ class TwilioVoiceHandler:
         # If no input, prompt again
         response.say(
             "I didn't catch that. Are you still there?",
-            voice="Polly.Ruth-Neural",
+            voice="Google.en-US-Neural2-F",
             language="en-US"
         )
 
@@ -78,7 +78,7 @@ class TwilioVoiceHandler:
         # Sarah speaks her response
         response.say(
             sarah_response,
-            voice="Polly.Ruth-Neural",
+            voice="Google.en-US-Neural2-F",
             language="en-US"
         )
 
@@ -86,7 +86,7 @@ class TwilioVoiceHandler:
             # End the call
             response.say(
                 "Thanks for your time. Goodbye!",
-                voice="Polly.Ruth-Neural",
+                voice="Google.en-US-Neural2-F",
                 language="en-US"
             )
             response.hangup()
@@ -107,7 +107,7 @@ class TwilioVoiceHandler:
             # If no input after waiting
             response.say(
                 "I didn't hear anything. Are you still there?",
-                voice="Polly.Ruth-Neural",
+                voice="Google.en-US-Neural2-F",
                 language="en-US"
             )
 
@@ -128,7 +128,7 @@ class TwilioVoiceHandler:
             # If still no input, end call
             response.say(
                 "I'll let you go. Feel free to call back anytime. Goodbye!",
-                voice="Polly.Ruth-Neural",
+                voice="Google.en-US-Neural2-F",
                 language="en-US"
             )
             response.hangup()
@@ -151,7 +151,7 @@ class TwilioVoiceHandler:
 
         response.say(
             message,
-            voice="Polly.Ruth-Neural",
+            voice="Google.en-US-Neural2-F",
             language="en-US"
         )
 
