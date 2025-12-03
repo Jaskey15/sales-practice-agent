@@ -131,3 +131,47 @@ class TranscriptStorage:
             "assistant_messages": len(assistant_messages),
             "duration_estimate": len(conversation) * 15  # Rough estimate: 15s per exchange
         }
+
+    def save_feedback(self, call_sid: str, feedback_data: Dict) -> str:
+        """
+        Save coaching feedback for a call.
+
+        Args:
+            call_sid: Twilio call SID
+            feedback_data: Dictionary containing feedback analysis
+
+        Returns:
+            Path to the saved feedback file
+        """
+        timestamp = datetime.now().isoformat()
+
+        feedback_record = {
+            "call_sid": call_sid,
+            "timestamp": timestamp,
+            "feedback": feedback_data
+        }
+
+        # Create filename: YYYYMMDD_HHMMSS_callsid_feedback.json
+        filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{call_sid}_feedback.json"
+        filepath = self.storage_dir / filename
+
+        with open(filepath, "w") as f:
+            json.dump(feedback_record, f, indent=2)
+
+        return str(filepath)
+
+    def load_feedback(self, call_sid: str) -> Optional[Dict]:
+        """
+        Load coaching feedback for a call.
+
+        Args:
+            call_sid: Twilio call SID
+
+        Returns:
+            Feedback data dictionary or None if not found
+        """
+        # Find file matching the call_sid
+        for filepath in self.storage_dir.glob(f"*_{call_sid}_feedback.json"):
+            with open(filepath, "r") as f:
+                return json.load(f)
+        return None

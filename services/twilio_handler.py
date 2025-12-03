@@ -29,10 +29,10 @@ class TwilioVoiceHandler:
         """
         response = VoiceResponse()
 
-        # Sarah says her greeting
+        # Sarah says her greeting - using Google's most natural voice
         response.say(
             greeting_text,
-            voice="Polly.Joanna",  # Natural US English female voice
+            voice="Google.en-US-Neural2-F",  # Google's high-quality neural voice (very natural)
             language="en-US"
         )
 
@@ -41,9 +41,10 @@ class TwilioVoiceHandler:
             input="speech",
             action=f"{self.base_url}/voice/respond",
             method="POST",
-            speech_timeout="auto",  # Auto-detect when user stops speaking
+            speech_timeout="1",  # 1 second of silence to detect end of speech
             speech_model="phone_call",  # Optimized for phone calls
-            language="en-US"
+            language="en-US",
+            action_on_empty_result=True  # Always callback even if no speech detected
         )
 
         response.append(gather)
@@ -51,7 +52,7 @@ class TwilioVoiceHandler:
         # If no input, prompt again
         response.say(
             "I didn't catch that. Are you still there?",
-            voice="Polly.Joanna",
+            voice="Google.en-US-Neural2-F",
             language="en-US"
         )
 
@@ -77,7 +78,7 @@ class TwilioVoiceHandler:
         # Sarah speaks her response
         response.say(
             sarah_response,
-            voice="Polly.Joanna",
+            voice="Google.en-US-Neural2-F",
             language="en-US"
         )
 
@@ -85,7 +86,7 @@ class TwilioVoiceHandler:
             # End the call
             response.say(
                 "Thanks for your time. Goodbye!",
-                voice="Polly.Joanna",
+                voice="Google.en-US-Neural2-F",
                 language="en-US"
             )
             response.hangup()
@@ -95,9 +96,10 @@ class TwilioVoiceHandler:
                 input="speech",
                 action=f"{self.base_url}/voice/respond",
                 method="POST",
-                speech_timeout="auto",
+                speech_timeout="1",
                 speech_model="phone_call",
-                language="en-US"
+                language="en-US",
+                action_on_empty_result=True
             )
 
             response.append(gather)
@@ -105,7 +107,7 @@ class TwilioVoiceHandler:
             # If no input after waiting
             response.say(
                 "I didn't hear anything. Are you still there?",
-                voice="Polly.Joanna",
+                voice="Google.en-US-Neural2-F",
                 language="en-US"
             )
 
@@ -114,10 +116,11 @@ class TwilioVoiceHandler:
                 input="speech",
                 action=f"{self.base_url}/voice/respond",
                 method="POST",
-                speech_timeout="auto",
+                speech_timeout="1",
                 speech_model="phone_call",
                 language="en-US",
-                timeout=5
+                timeout=5,
+                action_on_empty_result=True
             )
 
             response.append(final_gather)
@@ -125,7 +128,7 @@ class TwilioVoiceHandler:
             # If still no input, end call
             response.say(
                 "I'll let you go. Feel free to call back anytime. Goodbye!",
-                voice="Polly.Joanna",
+                voice="Google.en-US-Neural2-F",
                 language="en-US"
             )
             response.hangup()
@@ -148,7 +151,7 @@ class TwilioVoiceHandler:
 
         response.say(
             message,
-            voice="Polly.Joanna",
+            voice="Google.en-US-Neural2-F",
             language="en-US"
         )
 

@@ -1,0 +1,13 @@
+{
+  "call_sid": "CAc73eb1257b313e815b9756a08c04b28b",
+  "timestamp": "2025-11-17T19:34:08.528081",
+  "metadata": {
+    "persona": "Sarah Chen, VP of Operations"
+  },
+  "conversation": [
+    {
+      "role": "assistant",
+      "content": "Elite Auto Spa, this is Sarah speaking. How can I help you?"
+    }
+  ]
+}

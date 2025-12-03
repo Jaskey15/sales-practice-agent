@@ -14,9 +14,9 @@ class Settings(BaseSettings):
     twilio_auth_token: str
     twilio_phone_number: str
 
-    # Claude API Configuration
-    anthropic_api_key: str
-    claude_model: str = "claude-3-5-sonnet-20241022"
+    # OpenAI API Configuration
+    openai_api_key: str
+    openai_model: str = "gpt-5-chat"
 
     # Application Configuration
     host: str = "0.0.0.0"
