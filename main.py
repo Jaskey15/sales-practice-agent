@@ -70,10 +70,6 @@ async def handle_incoming_call(
     logger.info(f"Incoming call: {CallSid} from {From}")
 
     try:
-        # Create new Sarah persona for this call. Prefer OpenRouter key if provided.
-        api_key_to_use = settings.openrouter_api_key or settings.anthropic_api_key
-        use_openrouter = bool(settings.openrouter_api_key)
-
         sarah = SarahPersona(
             api_key=settings.openai_api_key,
             model=settings.openai_model

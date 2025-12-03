@@ -10,7 +10,7 @@ from pathlib import Path
 class SalesCoach:
     """Sales coach that analyzes transcripts and provides structured feedback."""
 
-    def __init__(self, api_key: str, model: str = "gpt-5-chat"):
+    def __init__(self, api_key: str, model: str = "gpt-5.1-chat-latest"):
         """
         Initialize Sales Coach with OpenAI API.
 

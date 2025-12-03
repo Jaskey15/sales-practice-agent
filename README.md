@@ -65,7 +65,7 @@ TWILIO_PHONE_NUMBER=+1234567890
 
 # OpenAI API Configuration
 OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-5-chat
+OPENAI_MODEL=gpt-5.1-chat-latest
 
 # Application Configuration
 HOST=0.0.0.0
