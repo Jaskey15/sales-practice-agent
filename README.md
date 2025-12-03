@@ -3,7 +3,7 @@
 A two-agent AI system for practicing and improving sales calls:
 
 - **Agent 1 (Persona)**: Sarah Chen, VP of Operations - a realistic prospect you can call and pitch to
-- **Agent 2 (Coach)**: Coming soon - analyzes transcripts and provides feedback
+- **Agent 2 (Coach)**: analyzes transcripts and provides feedback
 
 ## Features
 
