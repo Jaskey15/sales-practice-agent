@@ -16,9 +16,11 @@ class Settings(BaseSettings):
     twilio_auth_token: str
     twilio_phone_number: str
 
-    # OpenAI API Configuration
-    openai_api_key: str
-    openai_model: str = "gpt-4o-mini"
+    # OpenRouter API Configuration
+    openrouter_api_key: str
+    openrouter_model: str = "gpt-4o-mini"
+    openrouter_http_referer: Optional[str] = None
+    openrouter_x_title: Optional[str] = None
 
     # Application Configuration
     host: str = "0.0.0.0"

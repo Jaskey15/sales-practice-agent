@@ -1,0 +1,13 @@
+{
+  "call_sid": "CA3cf72af10bef0be7666ca9fccc6668a2",
+  "timestamp": "2025-12-03T15:51:36.054109",
+  "metadata": {
+    "persona": "Sarah Martinez, Operations Manager"
+  },
+  "conversation": [
+    {
+      "role": "assistant",
+      "content": "Hello, this is Sarah at Elite Auto Spa. How can I help you today?"
+    }
+  ]
+}

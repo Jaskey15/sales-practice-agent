@@ -5,28 +5,55 @@ Uses OpenAI API to maintain conversation as Sarah Martinez, Operations Manager.
 import logging
 
 from openai import OpenAI  # type: ignore[import]
-from typing import List, Dict
+from typing import Any, List, Dict, Optional
 from pathlib import Path
 
 
 logger = logging.getLogger(__name__)
 
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
 
 class SarahPersona:
     """Sarah Martinez persona for sales training."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "gpt-4o-mini",
+        *,
+        http_referer: Optional[str] = None,
+        x_title: Optional[str] = None,
+    ):
         """
-        Initialize Sarah persona with OpenAI API.
+        Initialize Sarah persona with OpenRouter (OpenAI-compatible) API.
 
         Args:
-            api_key: OpenAI API key
-            model: OpenAI chat model to use
+            api_key: OpenRouter API key
+            model: OpenRouter chat model to use
+            http_referer: Optional HTTP-Referer header for attribution
+            x_title: Optional X-Title header for attribution
         """
-        self.client = OpenAI(api_key=api_key)
+        headers: Dict[str, str] = {}
+        if http_referer:
+            headers["HTTP-Referer"] = http_referer
+        if x_title:
+            headers["X-Title"] = x_title
+
+        self._extra_headers = headers if headers else None
+
+        client_kwargs = {
+            "api_key": api_key,
+            "base_url": OPENROUTER_BASE_URL,
+        }
+        if self._extra_headers:
+            client_kwargs["default_headers"] = self._extra_headers
+
+        self.client = OpenAI(**client_kwargs)
         self.model = model
         self.system_prompt = self._load_persona_prompt()
         self.conversation_history: List[Dict[str, str]] = []
+        self.last_usage: Optional[Any] = None  # Stores usage metadata from last API call
 
     def _load_persona_prompt(self) -> str:
         """Load Sarah's persona prompt from file."""
@@ -56,11 +83,14 @@ class SarahPersona:
         messages.extend(self.conversation_history)
 
         # Call Chat Completions API (correct Python usage — NOT responses API)
+        self.last_usage = None
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
-            max_completion_tokens=150
+            max_completion_tokens=150,
+            extra_headers=self._extra_headers,
         )
+        self.last_usage = response.usage
 
         choice = response.choices[0]
         logger.debug(
@@ -107,11 +137,14 @@ class SarahPersona:
             {"role": "user", "content": greeting_prompt},
         ]
 
+        self.last_usage = None
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
-            max_completion_tokens=50
+            max_completion_tokens=50,
+            extra_headers=self._extra_headers,
         )
+        self.last_usage = response.usage
 
         choice = response.choices[0]
         logger.debug(

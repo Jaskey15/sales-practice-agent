@@ -3,23 +3,50 @@ Sales Coach agent that analyzes call transcripts and provides feedback.
 Uses OpenAI API to evaluate sales performance and provide structured coaching.
 """
 from openai import OpenAI
-from typing import Dict, List
+from typing import Dict, List, Optional
 from pathlib import Path
 import re
+
+
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
 class SalesCoach:
     """Sales coach that analyzes transcripts and provides structured feedback."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "gpt-4o-mini",
+        *,
+        http_referer: Optional[str] = None,
+        x_title: Optional[str] = None,
+    ):
         """
-        Initialize Sales Coach with OpenAI API.
+        Initialize Sales Coach with OpenRouter API.
 
         Args:
-            api_key: OpenAI API key
-            model: OpenAI chat model to use
+            api_key: OpenRouter API key
+            model: OpenRouter chat model to use
+            http_referer: Optional HTTP-Referer header for attribution
+            x_title: Optional X-Title header for attribution
         """
-        self.client = OpenAI(api_key=api_key)
+        headers: Dict[str, str] = {}
+        if http_referer:
+            headers["HTTP-Referer"] = http_referer
+        if x_title:
+            headers["X-Title"] = x_title
+
+        self._extra_headers = headers if headers else None
+
+        client_kwargs = {
+            "api_key": api_key,
+            "base_url": OPENROUTER_BASE_URL,
+        }
+        if self._extra_headers:
+            client_kwargs["default_headers"] = self._extra_headers
+
+        self.client = OpenAI(**client_kwargs)
         self.model = model
         self.system_prompt = self._load_coach_prompt()
 
@@ -69,6 +96,7 @@ Provide your analysis following the structured format defined in your system pro
                 {"role": "user", "content": analysis_prompt}
             ],
             max_completion_tokens=4000,
+            extra_headers=self._extra_headers,
         )
 
         feedback_text = response.choices[0].message.content
@@ -134,6 +162,7 @@ TRANSCRIPT:
                 {"role": "user", "content": summary_prompt},
             ],
             max_completion_tokens=200,
+            extra_headers=self._extra_headers,
         )
 
         return response.choices[0].message.content

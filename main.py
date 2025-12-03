@@ -34,11 +34,26 @@ twilio_handler = TwilioVoiceHandler(
     voice_id=settings.conversation_relay_voice_id
 )
 storage = TranscriptStorage(storage_dir=settings.transcripts_dir)
-coach = SalesCoach(api_key=settings.openai_api_key, model=settings.openai_model)
+coach = SalesCoach(
+    api_key=settings.openrouter_api_key,
+    model=settings.openrouter_model,
+    http_referer=settings.openrouter_http_referer,
+    x_title=settings.openrouter_x_title,
+)
 
 # Store active call sessions (in production, use Redis or database)
 # Key: call_sid, Value: SarahPersona instance
 active_calls: Dict[str, SarahPersona] = {}
+
+
+def create_sarah_persona() -> SarahPersona:
+    """Factory to create Sarah persona instances with configured OpenRouter options."""
+    return SarahPersona(
+        api_key=settings.openrouter_api_key,
+        model=settings.openrouter_model,
+        http_referer=settings.openrouter_http_referer,
+        x_title=settings.openrouter_x_title,
+    )
 
 CONVERSATION_RELAY_PATH = "/voice/relay"
 
@@ -76,10 +91,7 @@ async def handle_incoming_call(
     logger.info(f"Incoming call: {CallSid} from {From}")
 
     try:
-        sarah = SarahPersona(
-            api_key=settings.openai_api_key,
-            model=settings.openai_model
-        )
+        sarah = create_sarah_persona()
 
         # Store in active calls
         active_calls[CallSid] = sarah
@@ -132,10 +144,7 @@ async def conversation_relay_socket(websocket: WebSocket):
                     logger.info("ConversationRelay setup for existing call %s", call_sid)
                 else:
                     logger.info("ConversationRelay setup for new call %s", call_sid)
-                    sarah = SarahPersona(
-                        api_key=settings.openai_api_key,
-                        model=settings.openai_model,
-                    )
+                    sarah = create_sarah_persona()
                     active_calls[call_sid] = sarah
 
             elif message_type == "prompt":
@@ -149,10 +158,7 @@ async def conversation_relay_socket(websocket: WebSocket):
                     logger.warning(
                         "No active Sarah persona for call %s; creating a new session", call_sid
                     )
-                    sarah = SarahPersona(
-                        api_key=settings.openai_api_key,
-                        model=settings.openai_model,
-                    )
+                    sarah = create_sarah_persona()
                     active_calls[call_sid] = sarah
 
                 user_text = (message.get("voicePrompt") or "").strip()
