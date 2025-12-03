@@ -2,8 +2,10 @@
 Configuration management for the sales training system.
 Loads environment variables and provides typed configuration.
 """
-from pydantic_settings import BaseSettings
 from functools import lru_cache
+from typing import Optional
+
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -23,6 +25,11 @@ class Settings(BaseSettings):
     port: int = 8000
     base_url: str  # Your public URL for Twilio webhooks (e.g., from ngrok)
 
+    # ConversationRelay / ElevenLabs Configuration
+    conversation_relay_voice_id: str = "OYTbf65OHHFELVut7v2H"
+    conversation_relay_text_normalization: Optional[str] = "on"
+    conversation_relay_language: str = "en-US"
+
     # Storage Configuration
     transcripts_dir: str = "data/transcripts"
 
@@ -35,3 +42,4 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Get cached settings instance."""
     return Settings()
+
