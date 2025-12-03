@@ -17,7 +17,7 @@ class SalesCoach:
     def __init__(
         self,
         api_key: str,
-        model: str = "gpt-4o-mini",
+        model: str = "google/gemini-2.5-flash",
         *,
         http_referer: Optional[str] = None,
         x_title: Optional[str] = None,

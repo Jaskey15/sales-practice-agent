@@ -2,11 +2,14 @@
 Main FastAPI application for the voice sales training system.
 Handles Twilio webhooks for incoming calls and voice interactions.
 """
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+import json
+import logging
+import re
+
 from fastapi import FastAPI, Form, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import PlainTextResponse
-import logging
-import json
-from typing import Optional, Dict
 
 from config import get_settings
 from agents.persona import SarahPersona
@@ -41,9 +44,17 @@ coach = SalesCoach(
     x_title=settings.openrouter_x_title,
 )
 
+@dataclass
+class CallSession:
+    """Represents an active call session and associated metadata."""
+
+    persona: SarahPersona
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
 # Store active call sessions (in production, use Redis or database)
-# Key: call_sid, Value: SarahPersona instance
-active_calls: Dict[str, SarahPersona] = {}
+# Key: call_sid, Value: CallSession instance
+active_calls: Dict[str, CallSession] = {}
 
 
 def create_sarah_persona() -> SarahPersona:
@@ -54,6 +65,58 @@ def create_sarah_persona() -> SarahPersona:
         http_referer=settings.openrouter_http_referer,
         x_title=settings.openrouter_x_title,
     )
+
+def derive_friendly_label(
+    conversation: Optional[List[Dict[str, str]]],
+    metadata: Dict[str, Any],
+) -> str:
+    """
+    Build a human-friendly label for a call using metadata and conversation cues.
+    """
+    if metadata.get("friendly_label"):
+        return metadata["friendly_label"]
+
+    from_number = metadata.get("from_number")
+    first_user_message = ""
+    if conversation:
+        for message in conversation:
+            if message.get("role") == "user":
+                first_user_message = message.get("content", "")
+                break
+
+    name = None
+    company = None
+
+    if first_user_message:
+        # Look for introductory phrases like "This is Jane" or "I'm Jane"
+        name_match = re.search(
+            r"(?:this is|it's|it is|i'm|i am)\s+([A-Za-z][\w\s'-]{0,40})",
+            first_user_message,
+            flags=re.IGNORECASE,
+        )
+        if name_match:
+            name = name_match.group(1).strip(" .,!?:;").title()
+
+        company_match = re.search(
+            r"(?:with|from)\s+([A-Za-z0-9&][A-Za-z0-9&\s'-]{0,60})",
+            first_user_message,
+            flags=re.IGNORECASE,
+        )
+        if company_match:
+            company = company_match.group(1).strip(" .,!?:;")
+
+    if name and company:
+        metadata["friendly_label"] = f"{name} - {company}"
+    elif name:
+        metadata["friendly_label"] = name
+    elif company:
+        metadata["friendly_label"] = company
+    elif from_number:
+        metadata["friendly_label"] = str(from_number)
+    else:
+        metadata["friendly_label"] = metadata.get("persona", "Sales Call")
+
+    return metadata["friendly_label"]
 
 CONVERSATION_RELAY_PATH = "/voice/relay"
 
@@ -94,7 +157,14 @@ async def handle_incoming_call(
         sarah = create_sarah_persona()
 
         # Store in active calls
-        active_calls[CallSid] = sarah
+        active_calls[CallSid] = CallSession(
+            persona=sarah,
+            metadata={
+                "from_number": From,
+                "to_number": To,
+                "persona": "Sarah Martinez, Operations Manager",
+            },
+        )
 
         # Get Sarah's greeting for the welcome prompt
         greeting = sarah.get_greeting()
@@ -138,14 +208,18 @@ async def conversation_relay_socket(websocket: WebSocket):
                 if not call_sid:
                     logger.error("ConversationRelay setup message missing callSid")
                     continue
-
-                sarah = active_calls.get(call_sid)
-                if sarah:
+                session = active_calls.get(call_sid)
+                if session:
                     logger.info("ConversationRelay setup for existing call %s", call_sid)
+                    sarah = session.persona
                 else:
                     logger.info("ConversationRelay setup for new call %s", call_sid)
                     sarah = create_sarah_persona()
-                    active_calls[call_sid] = sarah
+                    session = CallSession(
+                        persona=sarah,
+                        metadata={"persona": "Sarah Martinez, Operations Manager"},
+                    )
+                    active_calls[call_sid] = session
 
             elif message_type == "prompt":
                 call_sid = message.get("callSid") or call_sid
@@ -153,13 +227,19 @@ async def conversation_relay_socket(websocket: WebSocket):
                     logger.error("Received ConversationRelay prompt without callSid")
                     continue
 
-                sarah = active_calls.get(call_sid)
-                if not sarah:
+                session = active_calls.get(call_sid)
+                if not session:
                     logger.warning(
                         "No active Sarah persona for call %s; creating a new session", call_sid
                     )
                     sarah = create_sarah_persona()
-                    active_calls[call_sid] = sarah
+                    session = CallSession(
+                        persona=sarah,
+                        metadata={"persona": "Sarah Martinez, Operations Manager"},
+                    )
+                    active_calls[call_sid] = session
+                else:
+                    sarah = session.persona
 
                 user_text = (message.get("voicePrompt") or "").strip()
                 if not user_text:
@@ -229,31 +309,49 @@ async def handle_call_status(
     return {"status": "ok"}
 
 
-async def cleanup_call(call_sid: str, sarah: Optional[SarahPersona] = None):
+async def cleanup_call(call_sid: str):
     """
     Cleanup call session and save transcript.
 
     Args:
         call_sid: Twilio call identifier
-        sarah: Sarah persona instance
     """
     try:
-        sarah_instance = sarah or active_calls.get(call_sid)
-        if not sarah_instance:
-            logger.debug("No Sarah persona found for cleanup of call %s", call_sid)
+        session = active_calls.get(call_sid)
+        if not session:
+            logger.debug("No call session found for cleanup of call %s", call_sid)
             return
+
+        sarah_instance = session.persona
+        metadata = dict(session.metadata)
 
         # Get conversation history
         conversation = sarah_instance.get_conversation_history()
 
         # Save transcript
         if conversation:
+            friendly_label = derive_friendly_label(conversation, metadata)
+            metadata["friendly_label"] = friendly_label
+
             filepath = storage.save_transcript(
                 call_sid=call_sid,
                 conversation_history=conversation,
-                metadata={"persona": "Sarah Martinez, Operations Manager"}
+                metadata=metadata,
             )
             logger.info(f"Transcript saved: {filepath}")
+
+            # Automatically run coach analysis
+            try:
+                logger.info("Running coach analysis for call %s...", call_sid)
+                feedback = coach.analyze_call(conversation, metadata)
+                feedback_path = storage.save_feedback(call_sid, feedback)
+                logger.info("Coach feedback saved: %s", feedback_path)
+            except Exception as coach_err:
+                logger.error(
+                    "Coach analysis failed for %s: %s", call_sid, coach_err, exc_info=True
+                )
+        else:
+            logger.info("No conversation history available for call %s; skipping save", call_sid)
 
         # Remove from active calls
         if call_sid in active_calls:

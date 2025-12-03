@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     # OpenRouter API Configuration
     openrouter_api_key: str
-    openrouter_model: str = "gpt-4o-mini"
+    openrouter_model: str = "google/gemini-2.5-flash"
     openrouter_http_referer: Optional[str] = None
     openrouter_x_title: Optional[str] = None
 
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     conversation_relay_language: str = "en-US"
 
     # Storage Configuration
-    transcripts_dir: str = "data/transcripts"
+    transcripts_dir: str = "data/calls"
 
     class Config:
         env_file = ".env"

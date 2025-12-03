@@ -1,0 +1,41 @@
+{
+  "call_sid": "CA3614dd5ca8d3c57f4c9fcc936fdc3f39",
+  "timestamp": "2025-12-03T16:52:29.501791",
+  "metadata": {
+    "from_number": "+14058314988",
+    "to_number": "+18448413420",
+    "persona": "Sarah Martinez, Operations Manager",
+    "friendly_label": "+14058314988",
+    "created_at": "2025-12-03T16:52:29.501791"
+  },
+  "conversation": [
+    {
+      "role": "assistant",
+      "content": "Elite Auto Spa, this is Sarah. How can I help you?"
+    },
+    {
+      "role": "user",
+      "content": "Hello, Sarah. How's it going?"
+    },
+    {
+      "role": "assistant",
+      "content": "Hey. It's going. Just juggling a few things. What can I do for you today?"
+    },
+    {
+      "role": "user",
+      "content": "So my name is Jacob. I work for a company called Workspring, and we help small and medium sized businesses find automations that work for them."
+    },
+    {
+      "role": "assistant",
+      "content": "Okay Jacob. Automations, huh? What kind of automations are we talking about? Our bays are pretty full as it is."
+    },
+    {
+      "role": "user",
+      "content": "First thing I wanna ask you is how do you guys typically handle your customer interactions?"
+    },
+    {
+      "role": "assistant",
+      "content": "Good question. It's a bit of a mixed bag right now. Phones are ringing off the hook, texts come in, and then there's email. It's hard to keep track of everything and make sure nothing falls through the cracks."
+    }
+  ]
+}
