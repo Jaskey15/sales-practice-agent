@@ -1,0 +1,29 @@
+{
+  "call_sid": "CA8b43719f357866da98a6b8bb0a3056a4",
+  "timestamp": "2025-12-03T11:31:18.657147",
+  "metadata": {
+    "persona": "Sarah Chen, VP of Operations"
+  },
+  "conversation": [
+    {
+      "role": "assistant",
+      "content": ""
+    },
+    {
+      "role": "user",
+      "content": "Yo, what it do?"
+    },
+    {
+      "role": "assistant",
+      "content": ""
+    },
+    {
+      "role": "user",
+      "content": "Hello, hello. Hello."
+    },
+    {
+      "role": "assistant",
+      "content": ""
+    }
+  ]
+}

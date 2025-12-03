@@ -8,7 +8,7 @@ A two-agent AI system for practicing and improving sales calls:
 ## Features
 
 - **Phone-based training**: Call in and practice your pitch on a real phone
-- **Realistic AI prospect**: Powered by OpenAI GPT-5 Chat, responds naturally with questions and objections
+- **Realistic AI prospect**: Powered by OpenAI GPT-5 Mini (`gpt-5-mini`), responds naturally with questions and objections
 - **Automatic transcription**: Twilio handles speech-to-text and text-to-speech
 - **Conversation history**: All calls are saved for later review
 
@@ -16,7 +16,7 @@ A two-agent AI system for practicing and improving sales calls:
 
 - **Backend**: Python + FastAPI
 - **Voice**: Twilio (phone, speech recognition, text-to-speech)
-- **AI**: OpenAI GPT-5 Chat API
+- **AI**: OpenAI GPT-5 Mini (`gpt-5-mini`) API
 - **Storage**: JSON files (easily upgradeable to SQLite/PostgreSQL)
 
 ## Prerequisites
@@ -161,10 +161,10 @@ sales-practice-agent/
 1. **You call** your Twilio number
 2. **Twilio** sends webhook to `/voice/incoming`
 3. **Server** creates a new Sarah persona instance
-4. **Sarah** generates a greeting via OpenAI GPT-5 Chat
+4. **Sarah** generates a greeting via OpenAI GPT-5 Mini (`gpt-5-mini`)
 5. **Twilio** converts text to speech and plays it
 6. **Twilio** captures your speech and converts to text
-7. **Server** sends your message to Sarah (OpenAI GPT-5 Chat)
+7. **Server** sends your message to Sarah (OpenAI GPT-5 Mini `gpt-5-mini`)
 8. **Sarah** responds naturally based on her persona
 9. **Repeat** steps 6-8 until call ends
 10. **Server** saves full transcript

@@ -1,16 +1,21 @@
 """
 Sarah persona agent that responds to sales pitches.
-Uses OpenAI API to maintain conversation as Sarah Chen, VP of Operations.
+Uses OpenAI API to maintain conversation as Sarah Martinez, Operations Manager.
 """
-from openai import OpenAI
+import logging
+
+from openai import OpenAI  # type: ignore[import]
 from typing import List, Dict
 from pathlib import Path
 
 
-class SarahPersona:
-    """Sarah Chen - VP of Operations persona for sales training."""
+logger = logging.getLogger(__name__)
 
-    def __init__(self, api_key: str, model: str = "gpt-5.1-chat-latest"):
+
+class SarahPersona:
+    """Sarah Martinez persona for sales training."""
+
+    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
         """
         Initialize Sarah persona with OpenAI API.
 
@@ -31,33 +36,42 @@ class SarahPersona:
 
     def respond(self, user_message: str) -> str:
         """
-        Generate Sarah's response to the user's message.
+        Generate Sarah’s response to the user’s message.
 
         Args:
-            user_message: The salesperson's message
+            user_message: The salesperson’s message
 
         Returns:
-            Sarah's response as text
+            Sarah’s response as text
         """
-        # Add user message to conversation history
+
+        # Add incoming message to history
         self.conversation_history.append({
             "role": "user",
             "content": user_message
         })
 
-        # Build messages with system prompt at the front
-        messages = [{"role": "system", "content": self.system_prompt}] + self.conversation_history
+        # Build messages array for the chat completion call
+        messages = [{"role": "system", "content": self.system_prompt}]
+        messages.extend(self.conversation_history)
 
-        # Call OpenAI chat completions API
+        # Call Chat Completions API (correct Python usage — NOT responses API)
         response = self.client.chat.completions.create(
             model=self.model,
-            max_tokens=150,  # Shorter responses for faster generation (2-3 sentences)
-            temperature=0.7,  # Some variability for natural conversation
-            messages=messages
+            messages=messages,
+            max_completion_tokens=150
         )
 
-        # Extract response text
-        assistant_message = response.choices[0].message.content
+        choice = response.choices[0]
+        logger.debug(
+            "OpenAI respond finish_reason=%s refusal=%s content=%r usage=%s",
+            choice.finish_reason,
+            choice.message.refusal,
+            choice.message.content,
+            response.usage,
+        )
+
+        assistant_message = choice.message.content
 
         # Add assistant response to conversation history
         self.conversation_history.append({
@@ -77,24 +91,38 @@ class SarahPersona:
 
     def get_greeting(self) -> str:
         """
-        Generate Sarah's initial greeting when answering the phone.
+        Generate Sarah’s initial greeting for the phone call.
 
         Returns:
-            Sarah's greeting message
+            Greeting string
         """
-        greeting_prompt = "You've just answered your office phone. Greet the caller professionally but briefly, as you would in a real business call."
+
+        greeting_prompt = (
+            "You've just answered your office phone. "
+            "Greet the caller professionally but briefly, like a real business call."
+        )
+
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": greeting_prompt},
+        ]
 
         response = self.client.chat.completions.create(
             model=self.model,
-            max_tokens=50,  # Very brief greeting
-            temperature=0.7,
-            messages=[
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": greeting_prompt}
-            ]
+            messages=messages,
+            max_completion_tokens=50
         )
 
-        greeting = response.choices[0].message.content
+        choice = response.choices[0]
+        logger.debug(
+            "OpenAI greeting finish_reason=%s refusal=%s content=%r usage=%s",
+            choice.finish_reason,
+            choice.message.refusal,
+            choice.message.content,
+            response.usage,
+        )
+
+        greeting = choice.message.content
 
         # Add greeting to conversation history
         self.conversation_history.append({
@@ -103,4 +131,3 @@ class SarahPersona:
         })
 
         return greeting
-

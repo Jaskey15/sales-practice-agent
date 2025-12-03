@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # OpenAI API Configuration
     openai_api_key: str
-    openai_model: str = "gpt-5.1-chat-latest"
+    openai_model: str = "gpt-4o-mini"
 
     # Application Configuration
     host: str = "0.0.0.0"
