@@ -30,7 +30,7 @@ settings = get_settings()
 # Initialize services
 twilio_handler = TwilioVoiceHandler(base_url=settings.base_url)
 storage = TranscriptStorage(storage_dir=settings.transcripts_dir)
-coach = SalesCoach(api_key=settings.anthropic_api_key, model=settings.claude_model)
+coach = SalesCoach(api_key=settings.openai_api_key, model=settings.openai_model)
 
 # Store active call sessions (in production, use Redis or database)
 # Key: call_sid, Value: SarahPersona instance
@@ -75,9 +75,8 @@ async def handle_incoming_call(
         use_openrouter = bool(settings.openrouter_api_key)
 
         sarah = SarahPersona(
-            api_key=api_key_to_use,
-            model=settings.claude_model,
-            use_openrouter=use_openrouter
+            api_key=settings.openai_api_key,
+            model=settings.openai_model
         )
 
         # Store in active calls

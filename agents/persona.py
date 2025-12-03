@@ -1,26 +1,24 @@
 """
 Sarah persona agent that responds to sales pitches.
-Uses Claude API to maintain conversation as Sarah Chen, VP of Operations.
+Uses OpenAI API to maintain conversation as Sarah Chen, VP of Operations.
 """
-import anthropic
-import requests
-from typing import List, Dict, Optional
+from openai import OpenAI
+from typing import List, Dict
 from pathlib import Path
 
 
 class SarahPersona:
     """Sarah Chen - VP of Operations persona for sales training."""
 
-    def __init__(self, api_key: str, model: str = "claude-3-5-sonnet-20241022", use_openrouter: bool = False):
+    def __init__(self, api_key: str, model: str = "gpt-5-chat"):
         """
-        Initialize Sarah persona with Claude API.
+        Initialize Sarah persona with OpenAI API.
 
         Args:
-            api_key: Anthropic API key or OpenRouter API key (depending on use_openrouter)
-            model: Claude model to use
+            api_key: OpenAI API key
+            model: OpenAI chat model to use
         """
-        self.api_key = api_key
-        self.use_openrouter = use_openrouter
+        self.client = OpenAI(api_key=api_key)
         self.model = model
         # If using OpenRouter, we'll call the OpenRouter HTTP API directly.
         if self.use_openrouter:
@@ -52,21 +50,19 @@ class SarahPersona:
             "content": user_message
         })
 
-        # Call API (OpenRouter or Anthropic)
-        if self.use_openrouter:
-            messages = [{"role": "system", "content": self.system_prompt}] + self.conversation_history
-            assistant_message = self._call_openrouter_chat(messages=messages, model=self.model, max_tokens=300, temperature=0.7)
-        else:
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=300,  # Keep responses concise (2-4 sentences)
-                temperature=0.7,  # Some variability for natural conversation
-                system=self.system_prompt,
-                messages=self.conversation_history
-            )
+        # Build messages with system prompt at the front
+        messages = [{"role": "system", "content": self.system_prompt}] + self.conversation_history
 
-            # Extract response text
-            assistant_message = response.content[0].text
+        # Call OpenAI chat completions API
+        response = self.client.chat.completions.create(
+            model=self.model,
+            max_tokens=150,  # Shorter responses for faster generation (2-3 sentences)
+            temperature=0.7,  # Some variability for natural conversation
+            messages=messages
+        )
+
+        # Extract response text
+        assistant_message = response.choices[0].message.content
 
         # Add assistant response to conversation history
         self.conversation_history.append({
@@ -93,19 +89,17 @@ class SarahPersona:
         """
         greeting_prompt = "You've just answered your office phone. Greet the caller professionally but briefly, as you would in a real business call."
 
-        if self.use_openrouter:
-            messages = [{"role": "system", "content": self.system_prompt}, {"role": "user", "content": greeting_prompt}]
-            greeting = self._call_openrouter_chat(messages=messages, model=self.model, max_tokens=100, temperature=0.7)
-        else:
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=100,
-                temperature=0.7,
-                system=self.system_prompt,
-                messages=[{"role": "user", "content": greeting_prompt}]
-            )
+        response = self.client.chat.completions.create(
+            model=self.model,
+            max_tokens=50,  # Very brief greeting
+            temperature=0.7,
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": greeting_prompt}
+            ]
+        )
 
-            greeting = response.content[0].text
+        greeting = response.choices[0].message.content
 
         # Add greeting to conversation history
         self.conversation_history.append({

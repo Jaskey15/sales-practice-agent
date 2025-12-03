@@ -1,8 +1,8 @@
 """
 Sales Coach agent that analyzes call transcripts and provides feedback.
-Uses Claude API to evaluate sales performance and provide structured coaching.
+Uses OpenAI API to evaluate sales performance and provide structured coaching.
 """
-import anthropic
+from openai import OpenAI
 from typing import Dict, List
 from pathlib import Path
 
@@ -10,15 +10,15 @@ from pathlib import Path
 class SalesCoach:
     """Sales coach that analyzes transcripts and provides structured feedback."""
 
-    def __init__(self, api_key: str, model: str = "claude-3-5-sonnet-20241022"):
+    def __init__(self, api_key: str, model: str = "gpt-5-chat"):
         """
-        Initialize Sales Coach with Claude API.
+        Initialize Sales Coach with OpenAI API.
 
         Args:
-            api_key: Anthropic API key
-            model: Claude model to use
+            api_key: OpenAI API key
+            model: OpenAI chat model to use
         """
-        self.client = anthropic.Anthropic(api_key=api_key)
+        self.client = OpenAI(api_key=api_key)
         self.model = model
         self.system_prompt = self._load_coach_prompt()
 
@@ -87,20 +87,19 @@ TRANSCRIPT:
 
 Provide your analysis following the structured format defined in your system prompt."""
 
-        # Call Claude API for analysis
-        response = self.client.messages.create(
+        # Call OpenAI chat completions API for analysis
+        response = self.client.chat.completions.create(
             model=self.model,
             max_tokens=4000,  # Longer response for detailed analysis
             temperature=0.3,  # Lower temperature for more consistent analysis
-            system=self.system_prompt,
-            messages=[{
-                "role": "user",
-                "content": analysis_prompt
-            }]
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": analysis_prompt}
+            ]
         )
 
         # Extract feedback
-        feedback_text = response.content[0].text
+        feedback_text = response.choices[0].message.content
 
         # Parse scores from feedback (basic extraction)
         scores = self._extract_scores(feedback_text)
@@ -175,14 +174,14 @@ Provide your analysis following the structured format defined in your system pro
 TRANSCRIPT:
 {transcript}"""
 
-        response = self.client.messages.create(
+        response = self.client.chat.completions.create(
             model=self.model,
             max_tokens=200,
             temperature=0.5,
-            messages=[{
-                "role": "user",
-                "content": summary_prompt
-            }]
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": summary_prompt}
+            ]
         )
 
-        return response.content[0].text
+        return response.choices[0].message.content

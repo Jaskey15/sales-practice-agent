@@ -8,7 +8,7 @@ A two-agent AI system for practicing and improving sales calls:
 ## Features
 
 - **Phone-based training**: Call in and practice your pitch on a real phone
-- **Realistic AI prospect**: Powered by Claude, responds naturally with questions and objections
+- **Realistic AI prospect**: Powered by OpenAI GPT-5 Chat, responds naturally with questions and objections
 - **Automatic transcription**: Twilio handles speech-to-text and text-to-speech
 - **Conversation history**: All calls are saved for later review
 
@@ -16,7 +16,7 @@ A two-agent AI system for practicing and improving sales calls:
 
 - **Backend**: Python + FastAPI
 - **Voice**: Twilio (phone, speech recognition, text-to-speech)
-- **AI**: Anthropic Claude API
+- **AI**: OpenAI GPT-5 Chat API
 - **Storage**: JSON files (easily upgradeable to SQLite/PostgreSQL)
 
 ## Prerequisites
@@ -25,7 +25,7 @@ A two-agent AI system for practicing and improving sales calls:
 2. **Twilio Account**: Sign up at https://www.twilio.com
    - Purchase a phone number with voice capabilities
    - Get your Account SID and Auth Token
-3. **Anthropic API Key**: Get from https://console.anthropic.com
+3. **OpenAI API Key**: Get from https://platform.openai.com/
 4. **ngrok** (for development): Download from https://ngrok.com
 
 ## Installation
@@ -63,9 +63,9 @@ TWILIO_ACCOUNT_SID=your_account_sid_here
 TWILIO_AUTH_TOKEN=your_auth_token_here
 TWILIO_PHONE_NUMBER=+1234567890
 
-# Claude API Configuration
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
-CLAUDE_MODEL=claude-3-5-sonnet-20241022
+# OpenAI API Configuration
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-5-chat
 
 # Application Configuration
 HOST=0.0.0.0
@@ -143,7 +143,7 @@ sales-practice-agent/
 ├── .env                      # Environment variables (create from .env.example)
 ├── agents/
 │   ├── __init__.py
-│   └── persona.py           # Sarah persona + Claude integration
+│   └── persona.py           # Sarah persona + OpenAI integration
 ├── services/
 │   ├── __init__.py
 │   ├── twilio_handler.py    # TwiML response generation
@@ -161,10 +161,10 @@ sales-practice-agent/
 1. **You call** your Twilio number
 2. **Twilio** sends webhook to `/voice/incoming`
 3. **Server** creates a new Sarah persona instance
-4. **Sarah** generates a greeting via Claude API
+4. **Sarah** generates a greeting via OpenAI GPT-5 Chat
 5. **Twilio** converts text to speech and plays it
 6. **Twilio** captures your speech and converts to text
-7. **Server** sends your message to Sarah (Claude API)
+7. **Server** sends your message to Sarah (OpenAI GPT-5 Chat)
 8. **Sarah** responds naturally based on her persona
 9. **Repeat** steps 6-8 until call ends
 10. **Server** saves full transcript
@@ -242,8 +242,8 @@ INFO: Sarah response: Thanks for calling. What can I help you with?
 
 ### Sarah doesn't respond
 
-- Verify `ANTHROPIC_API_KEY` is correct
-- Check Claude API quota/limits
+- Verify `OPENAI_API_KEY` is correct
+- Check OpenAI API quota/limits
 - Look for errors in server logs
 
 ### Speech recognition issues
@@ -272,7 +272,7 @@ For production:
 ## Cost Considerations
 
 - **Twilio**: ~$1/month for phone number + $0.0140/min for calls
-- **Claude API**: ~$3 per million input tokens (very cheap for voice calls)
+- **OpenAI API**: Pricing varies by model usage (see OpenAI pricing page)
 - **Infrastructure**: Free tier on most cloud providers for low usage
 
 A 5-minute practice call typically costs less than $0.10.
