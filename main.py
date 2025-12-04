@@ -2,15 +2,19 @@
 Main FastAPI application for the voice sales training system.
 Handles Twilio webhooks for incoming calls and voice interactions.
 """
-from fastapi import FastAPI, Form, Request, Response
-from fastapi.responses import PlainTextResponse
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+import json
 import logging
-from typing import Optional, Dict
+import re
+
+from fastapi import FastAPI, Form, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import PlainTextResponse
 
 from config import get_settings
 from agents.persona import SarahPersona
 from agents.coach import SalesCoach
-from services.twilio_handler import TwilioVoiceHandler
+from services.twilio_handler import TwilioVoiceHandler, ConversationRelayConfig
 from services.storage import TranscriptStorage
 
 # Configure logging
@@ -28,13 +32,93 @@ app = FastAPI(
 settings = get_settings()
 
 # Initialize services
-twilio_handler = TwilioVoiceHandler(base_url=settings.base_url)
+twilio_handler = TwilioVoiceHandler(
+    base_url=settings.base_url,
+    voice_id=settings.conversation_relay_voice_id
+)
 storage = TranscriptStorage(storage_dir=settings.transcripts_dir)
-coach = SalesCoach(api_key=settings.openai_api_key, model=settings.openai_model)
+coach = SalesCoach(
+    api_key=settings.openrouter_api_key,
+    model=settings.openrouter_model,
+    http_referer=settings.openrouter_http_referer,
+    x_title=settings.openrouter_x_title,
+)
+
+@dataclass
+class CallSession:
+    """Represents an active call session and associated metadata."""
+
+    persona: SarahPersona
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
 
 # Store active call sessions (in production, use Redis or database)
-# Key: call_sid, Value: SarahPersona instance
-active_calls: Dict[str, SarahPersona] = {}
+# Key: call_sid, Value: CallSession instance
+active_calls: Dict[str, CallSession] = {}
+
+
+def create_sarah_persona() -> SarahPersona:
+    """Factory to create Sarah persona instances with configured OpenRouter options."""
+    return SarahPersona(
+        api_key=settings.openrouter_api_key,
+        model=settings.openrouter_model,
+        http_referer=settings.openrouter_http_referer,
+        x_title=settings.openrouter_x_title,
+    )
+
+def derive_friendly_label(
+    conversation: Optional[List[Dict[str, str]]],
+    metadata: Dict[str, Any],
+) -> str:
+    """
+    Build a human-friendly label for a call using metadata and conversation cues.
+    """
+    if metadata.get("friendly_label"):
+        return metadata["friendly_label"]
+
+    from_number = metadata.get("from_number")
+    first_user_message = ""
+    if conversation:
+        for message in conversation:
+            if message.get("role") == "user":
+                first_user_message = message.get("content", "")
+                break
+
+    name = None
+    company = None
+
+    if first_user_message:
+        # Look for introductory phrases like "This is Jane" or "I'm Jane"
+        name_match = re.search(
+            r"(?:this is|it's|it is|i'm|i am)\s+([A-Za-z][\w\s'-]{0,40})",
+            first_user_message,
+            flags=re.IGNORECASE,
+        )
+        if name_match:
+            name = name_match.group(1).strip(" .,!?:;").title()
+
+        company_match = re.search(
+            r"(?:with|from)\s+([A-Za-z0-9&][A-Za-z0-9&\s'-]{0,60})",
+            first_user_message,
+            flags=re.IGNORECASE,
+        )
+        if company_match:
+            company = company_match.group(1).strip(" .,!?:;")
+
+    if name and company:
+        metadata["friendly_label"] = f"{name} - {company}"
+    elif name:
+        metadata["friendly_label"] = name
+    elif company:
+        metadata["friendly_label"] = company
+    elif from_number:
+        metadata["friendly_label"] = str(from_number)
+    else:
+        metadata["friendly_label"] = metadata.get("persona", "Sales Call")
+
+    return metadata["friendly_label"]
+
+CONVERSATION_RELAY_PATH = "/voice/relay"
 
 
 @app.get("/")
@@ -70,24 +154,33 @@ async def handle_incoming_call(
     logger.info(f"Incoming call: {CallSid} from {From}")
 
     try:
-        # Create new Sarah persona for this call. Prefer OpenRouter key if provided.
-        api_key_to_use = settings.openrouter_api_key or settings.anthropic_api_key
-        use_openrouter = bool(settings.openrouter_api_key)
-
-        sarah = SarahPersona(
-            api_key=settings.openai_api_key,
-            model=settings.openai_model
-        )
+        sarah = create_sarah_persona()
 
         # Store in active calls
-        active_calls[CallSid] = sarah
+        active_calls[CallSid] = CallSession(
+            persona=sarah,
+            metadata={
+                "from_number": From,
+                "to_number": To,
+                "persona": "Sarah Martinez, Operations Manager",
+            },
+        )
 
-        # Get Sarah's greeting
+        # Get Sarah's greeting for the welcome prompt
         greeting = sarah.get_greeting()
         logger.info(f"Sarah greeting: {greeting}")
 
-        # Generate TwiML response
-        twiml = twilio_handler.create_greeting_response(greeting)
+        relay_config = ConversationRelayConfig(
+            voice_id=twilio_handler.voice_id,
+            welcome_greeting=greeting,
+            text_normalization=settings.conversation_relay_text_normalization,
+            language=settings.conversation_relay_language,
+        )
+
+        twiml = twilio_handler.create_conversationrelay_response(
+            config=relay_config,
+            relay_path=CONVERSATION_RELAY_PATH,
+        )
 
         return PlainTextResponse(content=twiml, media_type="application/xml")
 
@@ -97,81 +190,96 @@ async def handle_incoming_call(
         return PlainTextResponse(content=twiml, media_type="application/xml")
 
 
-@app.post("/voice/respond", response_class=PlainTextResponse)
-async def handle_voice_response(
-    request: Request,
-    CallSid: str = Form(...),
-    SpeechResult: Optional[str] = Form(None),
-    Confidence: Optional[float] = Form(None)
-):
-    """
-    Handle user's voice input and generate Sarah's response.
-    This is called after Twilio captures the user's speech.
+@app.websocket(CONVERSATION_RELAY_PATH)
+async def conversation_relay_socket(websocket: WebSocket):
+    """Handle Twilio ConversationRelay websocket connections."""
+    await websocket.accept()
 
-    Args:
-        request: FastAPI request object
-        CallSid: Twilio call identifier
-        SpeechResult: User's speech transcribed to text
-        Confidence: Confidence score of speech recognition (0.0-1.0)
-
-    Returns:
-        TwiML response with Sarah's reply
-    """
-    logger.info(f"Voice response for call {CallSid}: '{SpeechResult}' (confidence: {Confidence})")
+    call_sid: Optional[str] = None
 
     try:
-        # Get Sarah persona for this call
-        sarah = active_calls.get(CallSid)
+        while True:
+            payload = await websocket.receive_text()
+            message = json.loads(payload)
+            message_type = message.get("type")
 
-        if not sarah:
-            logger.error(f"No active call found for {CallSid}")
-            twiml = twilio_handler.create_error_response(
-                "I'm sorry, there was an error with your call. Please call back."
-            )
-            return PlainTextResponse(content=twiml, media_type="application/xml")
+            if message_type == "setup":
+                call_sid = message.get("callSid")
+                if not call_sid:
+                    logger.error("ConversationRelay setup message missing callSid")
+                    continue
+                session = active_calls.get(call_sid)
+                if session:
+                    logger.info("ConversationRelay setup for existing call %s", call_sid)
+                    sarah = session.persona
+                else:
+                    logger.info("ConversationRelay setup for new call %s", call_sid)
+                    sarah = create_sarah_persona()
+                    session = CallSession(
+                        persona=sarah,
+                        metadata={"persona": "Sarah Martinez, Operations Manager"},
+                    )
+                    active_calls[call_sid] = session
 
-        # Handle case where no speech was detected
-        if not SpeechResult:
-            logger.warning(f"No speech detected for call {CallSid}")
-            twiml = twilio_handler.create_conversation_response(
-                "I didn't catch that. Could you repeat?",
-                is_final=False
-            )
-            return PlainTextResponse(content=twiml, media_type="application/xml")
+            elif message_type == "prompt":
+                call_sid = message.get("callSid") or call_sid
+                if not call_sid:
+                    logger.error("Received ConversationRelay prompt without callSid")
+                    continue
 
-        # Check if confidence is too low (optional threshold)
-        if Confidence is not None and Confidence < 0.5:
-            logger.warning(f"Low confidence ({Confidence}) for call {CallSid}")
-            # Still process it, but could add special handling
+                session = active_calls.get(call_sid)
+                if not session:
+                    logger.warning(
+                        "No active Sarah persona for call %s; creating a new session", call_sid
+                    )
+                    sarah = create_sarah_persona()
+                    session = CallSession(
+                        persona=sarah,
+                        metadata={"persona": "Sarah Martinez, Operations Manager"},
+                    )
+                    active_calls[call_sid] = session
+                else:
+                    sarah = session.persona
 
-        # Get Sarah's response
-        sarah_response = sarah.respond(SpeechResult)
-        logger.info(f"Sarah response: {sarah_response}")
+                user_text = (message.get("voicePrompt") or "").strip()
+                if not user_text:
+                    logger.info("Empty prompt received for call %s; ignoring", call_sid)
+                    continue
 
-        # Check if call should end
-        should_end = twilio_handler.should_end_call(SpeechResult)
+                logger.info("ConversationRelay prompt for %s: %s", call_sid, user_text)
 
-        # Generate TwiML response
-        twiml = twilio_handler.create_conversation_response(
-            sarah_response,
-            is_final=should_end
-        )
+                sarah_response = sarah.respond(user_text)
+                logger.info("Sarah response for %s: %s", call_sid, sarah_response)
 
-        # If call is ending, save transcript and cleanup
-        if should_end:
-            await cleanup_call(CallSid, sarah)
+                reply = {
+                    "type": "text",
+                    "token": sarah_response,
+                    "last": True,
+                }
 
-        return PlainTextResponse(content=twiml, media_type="application/xml")
+                await websocket.send_text(json.dumps(reply))
 
+                if twilio_handler.should_end_call(user_text):
+                    logger.info("Detected end of call intent for %s", call_sid)
+
+            elif message_type == "interrupt":
+                call_sid = message.get("callSid") or call_sid
+                logger.info(
+                    "ConversationRelay interrupt for %s: %s",
+                    call_sid,
+                    message.get("reason"),
+                )
+
+            else:
+                logger.debug("ConversationRelay received unhandled message: %s", message)
+
+    except WebSocketDisconnect:
+        logger.info("ConversationRelay websocket disconnected for call %s", call_sid)
     except Exception as e:
-        logger.error(f"Error handling voice response: {e}", exc_info=True)
-        twiml = twilio_handler.create_error_response()
-
-        # Cleanup call on error
-        if CallSid in active_calls:
-            await cleanup_call(CallSid, active_calls[CallSid])
-
-        return PlainTextResponse(content=twiml, media_type="application/xml")
+        logger.error(f"Error handling ConversationRelay websocket: {e}", exc_info=True)
+    finally:
+        if call_sid:
+            await cleanup_call(call_sid)
 
 
 @app.post("/voice/status")
@@ -196,33 +304,54 @@ async def handle_call_status(
 
     # If call completed or failed, cleanup
     if CallStatus in ["completed", "failed", "busy", "no-answer"]:
-        sarah = active_calls.get(CallSid)
-        if sarah:
-            await cleanup_call(CallSid, sarah)
+        await cleanup_call(CallSid)
 
     return {"status": "ok"}
 
 
-async def cleanup_call(call_sid: str, sarah: SarahPersona):
+async def cleanup_call(call_sid: str):
     """
     Cleanup call session and save transcript.
 
     Args:
         call_sid: Twilio call identifier
-        sarah: Sarah persona instance
     """
     try:
+        session = active_calls.get(call_sid)
+        if not session:
+            logger.debug("No call session found for cleanup of call %s", call_sid)
+            return
+
+        sarah_instance = session.persona
+        metadata = dict(session.metadata)
+
         # Get conversation history
-        conversation = sarah.get_conversation_history()
+        conversation = sarah_instance.get_conversation_history()
 
         # Save transcript
         if conversation:
+            friendly_label = derive_friendly_label(conversation, metadata)
+            metadata["friendly_label"] = friendly_label
+
             filepath = storage.save_transcript(
                 call_sid=call_sid,
                 conversation_history=conversation,
-                metadata={"persona": "Sarah Chen, VP of Operations"}
+                metadata=metadata,
             )
             logger.info(f"Transcript saved: {filepath}")
+
+            # Automatically run coach analysis
+            try:
+                logger.info("Running coach analysis for call %s...", call_sid)
+                feedback = coach.analyze_call(conversation, metadata)
+                feedback_path = storage.save_feedback(call_sid, feedback)
+                logger.info("Coach feedback saved: %s", feedback_path)
+            except Exception as coach_err:
+                logger.error(
+                    "Coach analysis failed for %s: %s", call_sid, coach_err, exc_info=True
+                )
+        else:
+            logger.info("No conversation history available for call %s; skipping save", call_sid)
 
         # Remove from active calls
         if call_sid in active_calls:

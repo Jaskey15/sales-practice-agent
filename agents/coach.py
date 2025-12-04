@@ -3,22 +3,50 @@ Sales Coach agent that analyzes call transcripts and provides feedback.
 Uses OpenAI API to evaluate sales performance and provide structured coaching.
 """
 from openai import OpenAI
-from typing import Dict, List
+from typing import Dict, List, Optional
 from pathlib import Path
+import re
+
+
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
 class SalesCoach:
     """Sales coach that analyzes transcripts and provides structured feedback."""
 
-    def __init__(self, api_key: str, model: str = "gpt-5-chat"):
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "google/gemini-2.5-flash",
+        *,
+        http_referer: Optional[str] = None,
+        x_title: Optional[str] = None,
+    ):
         """
-        Initialize Sales Coach with OpenAI API.
+        Initialize Sales Coach with OpenRouter API.
 
         Args:
-            api_key: OpenAI API key
-            model: OpenAI chat model to use
+            api_key: OpenRouter API key
+            model: OpenRouter chat model to use
+            http_referer: Optional HTTP-Referer header for attribution
+            x_title: Optional X-Title header for attribution
         """
-        self.client = OpenAI(api_key=api_key)
+        headers: Dict[str, str] = {}
+        if http_referer:
+            headers["HTTP-Referer"] = http_referer
+        if x_title:
+            headers["X-Title"] = x_title
+
+        self._extra_headers = headers if headers else None
+
+        client_kwargs = {
+            "api_key": api_key,
+            "base_url": OPENROUTER_BASE_URL,
+        }
+        if self._extra_headers:
+            client_kwargs["default_headers"] = self._extra_headers
+
+        self.client = OpenAI(**client_kwargs)
         self.model = model
         self.system_prompt = self._load_coach_prompt()
 
@@ -29,22 +57,13 @@ class SalesCoach:
             return f.read()
 
     def _format_transcript_for_analysis(self, conversation: List[Dict[str, str]]) -> str:
-        """
-        Format conversation history into readable transcript.
-
-        Args:
-            conversation: List of message dictionaries with 'role' and 'content'
-
-        Returns:
-            Formatted transcript string
-        """
+        """Format conversation history into readable transcript."""
         transcript_lines = []
 
-        for i, message in enumerate(conversation):
+        for message in conversation:
             role = message.get("role", "unknown")
             content = message.get("content", "")
 
-            # Format based on role
             if role == "assistant":
                 speaker = "PROSPECT (Sarah)"
             elif role == "user":
@@ -56,52 +75,32 @@ class SalesCoach:
 
         return "\n\n".join(transcript_lines)
 
-    def analyze_call(
-        self,
-        conversation: List[Dict[str, str]],
-        call_metadata: Dict = None
-    ) -> Dict[str, any]:
-        """
-        Analyze a sales call and provide structured feedback.
-
-        Args:
-            conversation: List of message dictionaries from the call
-            call_metadata: Optional metadata about the call
-
-        Returns:
-            Dictionary containing:
-                - overall_score: Overall performance score (0-10)
-                - detailed_scores: Dict of category scores
-                - feedback: Full structured feedback text
-                - top_strengths: List of strengths
-                - areas_for_improvement: List of improvements
-        """
-        # Format the transcript
+    def analyze_call(self, conversation: List[Dict[str, str]], call_metadata: Dict = None) -> Dict[str, any]:
+        """Analyze a sales call and provide structured feedback."""
         transcript = self._format_transcript_for_analysis(conversation)
 
-        # Create analysis prompt
-        analysis_prompt = f"""Analyze this sales call transcript and provide detailed coaching feedback.
+        analysis_prompt = f"""
+Analyze this sales call transcript and provide detailed coaching feedback.
 
 TRANSCRIPT:
 {transcript}
 
-Provide your analysis following the structured format defined in your system prompt."""
+Provide your analysis following the structured format defined in your system prompt.
+"""
 
-        # Call OpenAI chat completions API for analysis
+        # Chat Completions API (gpt-4o-mini compatible)
         response = self.client.chat.completions.create(
             model=self.model,
-            max_tokens=4000,  # Longer response for detailed analysis
-            temperature=0.3,  # Lower temperature for more consistent analysis
             messages=[
                 {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": analysis_prompt}
-            ]
+            ],
+            max_completion_tokens=4000,
+            extra_headers=self._extra_headers,
         )
 
-        # Extract feedback
         feedback_text = response.choices[0].message.content
 
-        # Parse scores from feedback (basic extraction)
         scores = self._extract_scores(feedback_text)
 
         return {
@@ -119,17 +118,7 @@ Provide your analysis following the structured format defined in your system pro
         }
 
     def _extract_scores(self, feedback_text: str) -> Dict[str, float]:
-        """
-        Extract numerical scores from feedback text.
-
-        Args:
-            feedback_text: Full feedback text with scores
-
-        Returns:
-            Dictionary of extracted scores
-        """
-        import re
-
+        """Extract numerical scores from feedback text."""
         scores = {}
 
         # Extract overall score
@@ -138,7 +127,7 @@ Provide your analysis following the structured format defined in your system pro
             scores['overall'] = float(overall_match.group(1))
 
         # Extract detailed scores
-        score_patterns = {
+        patterns = {
             'discovery': r'Discovery & Qualification:\*\*\s*(\d+(?:\.\d+)?)/10',
             'objection_handling': r'Objection Handling:\*\*\s*(\d+(?:\.\d+)?)/10',
             'value_articulation': r'Value Articulation:\*\*\s*(\d+(?:\.\d+)?)/10',
@@ -147,41 +136,33 @@ Provide your analysis following the structured format defined in your system pro
             'closing': r'Closing & Next Steps:\*\*\s*(\d+(?:\.\d+)?)/10',
         }
 
-        for key, pattern in score_patterns.items():
+        for key, pattern in patterns.items():
             match = re.search(pattern, feedback_text)
             if match:
                 scores[key] = float(match.group(1))
 
         return scores
 
-    def quick_summary(
-        self,
-        conversation: List[Dict[str, str]]
-    ) -> str:
-        """
-        Generate a quick 2-3 sentence summary of the call.
-
-        Args:
-            conversation: List of message dictionaries from the call
-
-        Returns:
-            Brief summary string
-        """
+    def quick_summary(self, conversation: List[Dict[str, str]]) -> str:
+        """Generate a brief 2–3 sentence summary of the call."""
         transcript = self._format_transcript_for_analysis(conversation)
 
-        summary_prompt = f"""Provide a brief 2-3 sentence summary of this sales call. What happened and what was the outcome?
+        summary_prompt = f"""
+Provide a concise 2–3 sentence summary of this sales call.
+What happened, and what was the outcome?
 
 TRANSCRIPT:
-{transcript}"""
+{transcript}
+"""
 
         response = self.client.chat.completions.create(
             model=self.model,
-            max_tokens=200,
-            temperature=0.5,
             messages=[
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": summary_prompt}
-            ]
+                {"role": "system", "content": "You are a summarization assistant."},
+                {"role": "user", "content": summary_prompt},
+            ],
+            max_completion_tokens=200,
+            extra_headers=self._extra_headers,
         )
 
         return response.choices[0].message.content

@@ -1,32 +1,59 @@
 """
 Sarah persona agent that responds to sales pitches.
-Uses OpenAI API to maintain conversation as Sarah Chen, VP of Operations.
+Uses OpenAI API to maintain conversation as Sarah Martinez, Operations Manager.
 """
-from openai import OpenAI
-from typing import List, Dict
+import logging
+
+from openai import OpenAI  # type: ignore[import]
+from typing import Any, List, Dict, Optional
 from pathlib import Path
 
 
-class SarahPersona:
-    """Sarah Chen - VP of Operations persona for sales training."""
+logger = logging.getLogger(__name__)
 
-    def __init__(self, api_key: str, model: str = "gpt-5-chat"):
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+
+class SarahPersona:
+    """Sarah Martinez persona for sales training."""
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "google/gemini-2.5-flash",
+        *,
+        http_referer: Optional[str] = None,
+        x_title: Optional[str] = None,
+    ):
         """
-        Initialize Sarah persona with OpenAI API.
+        Initialize Sarah persona with OpenRouter (OpenAI-compatible) API.
 
         Args:
-            api_key: OpenAI API key
-            model: OpenAI chat model to use
+            api_key: OpenRouter API key
+            model: OpenRouter chat model to use
+            http_referer: Optional HTTP-Referer header for attribution
+            x_title: Optional X-Title header for attribution
         """
-        self.client = OpenAI(api_key=api_key)
+        headers: Dict[str, str] = {}
+        if http_referer:
+            headers["HTTP-Referer"] = http_referer
+        if x_title:
+            headers["X-Title"] = x_title
+
+        self._extra_headers = headers if headers else None
+
+        client_kwargs = {
+            "api_key": api_key,
+            "base_url": OPENROUTER_BASE_URL,
+        }
+        if self._extra_headers:
+            client_kwargs["default_headers"] = self._extra_headers
+
+        self.client = OpenAI(**client_kwargs)
         self.model = model
-        # If using OpenRouter, we'll call the OpenRouter HTTP API directly.
-        if self.use_openrouter:
-            self.client = None
-        else:
-            self.client = anthropic.Anthropic(api_key=api_key)
         self.system_prompt = self._load_persona_prompt()
         self.conversation_history: List[Dict[str, str]] = []
+        self.last_usage: Optional[Any] = None  # Stores usage metadata from last API call
 
     def _load_persona_prompt(self) -> str:
         """Load Sarah's persona prompt from file."""
@@ -36,33 +63,45 @@ class SarahPersona:
 
     def respond(self, user_message: str) -> str:
         """
-        Generate Sarah's response to the user's message.
+        Generate Sarah’s response to the user’s message.
 
         Args:
-            user_message: The salesperson's message
+            user_message: The salesperson’s message
 
         Returns:
-            Sarah's response as text
+            Sarah’s response as text
         """
-        # Add user message to conversation history
+
+        # Add incoming message to history
         self.conversation_history.append({
             "role": "user",
             "content": user_message
         })
 
-        # Build messages with system prompt at the front
-        messages = [{"role": "system", "content": self.system_prompt}] + self.conversation_history
+        # Build messages array for the chat completion call
+        messages = [{"role": "system", "content": self.system_prompt}]
+        messages.extend(self.conversation_history)
 
-        # Call OpenAI chat completions API
+        # Call Chat Completions API (correct Python usage — NOT responses API)
+        self.last_usage = None
         response = self.client.chat.completions.create(
             model=self.model,
-            max_tokens=150,  # Shorter responses for faster generation (2-3 sentences)
-            temperature=0.7,  # Some variability for natural conversation
-            messages=messages
+            messages=messages,
+            max_completion_tokens=150,
+            extra_headers=self._extra_headers,
+        )
+        self.last_usage = response.usage
+
+        choice = response.choices[0]
+        logger.debug(
+            "OpenAI respond finish_reason=%s refusal=%s content=%r usage=%s",
+            choice.finish_reason,
+            choice.message.refusal,
+            choice.message.content,
+            response.usage,
         )
 
-        # Extract response text
-        assistant_message = response.choices[0].message.content
+        assistant_message = choice.message.content
 
         # Add assistant response to conversation history
         self.conversation_history.append({
@@ -82,24 +121,41 @@ class SarahPersona:
 
     def get_greeting(self) -> str:
         """
-        Generate Sarah's initial greeting when answering the phone.
+        Generate Sarah’s initial greeting for the phone call.
 
         Returns:
-            Sarah's greeting message
+            Greeting string
         """
-        greeting_prompt = "You've just answered your office phone. Greet the caller professionally but briefly, as you would in a real business call."
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            max_tokens=50,  # Very brief greeting
-            temperature=0.7,
-            messages=[
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": greeting_prompt}
-            ]
+        greeting_prompt = (
+            "You've just answered your office phone. "
+            "Greet the caller professionally but briefly, like a real business call."
         )
 
-        greeting = response.choices[0].message.content
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": greeting_prompt},
+        ]
+
+        self.last_usage = None
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            max_completion_tokens=50,
+            extra_headers=self._extra_headers,
+        )
+        self.last_usage = response.usage
+
+        choice = response.choices[0]
+        logger.debug(
+            "OpenAI greeting finish_reason=%s refusal=%s content=%r usage=%s",
+            choice.finish_reason,
+            choice.message.refusal,
+            choice.message.content,
+            response.usage,
+        )
+
+        greeting = choice.message.content
 
         # Add greeting to conversation history
         self.conversation_history.append({
@@ -108,42 +164,3 @@ class SarahPersona:
         })
 
         return greeting
-
-    def _call_openrouter_chat(self, messages: List[Dict[str, str]], model: str, max_tokens: int = 300, temperature: float = 0.7) -> str:
-        """
-        Call OpenRouter chat completions endpoint and return assistant text.
-        This uses the OpenRouter API which is compatible with OpenAI-style chat completions.
-        """
-        if not self.api_key:
-            raise ValueError("OpenRouter API key not set")
-
-        url = "https://api.openrouter.ai/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": model,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature
-        }
-
-        resp = requests.post(url, json=payload, headers=headers, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-
-        # Try common response shapes (OpenAI-compatible)
-        try:
-            return data["choices"][0]["message"]["content"]
-        except Exception:
-            # Fallback to other possible shapes
-            # e.g., some OpenRouter responses may include 'output' or nested content
-            if "output" in data:
-                try:
-                    # output can be a list of objects with 'content' arrays
-                    return data["output"][0]["content"][0]["text"]
-                except Exception:
-                    pass
-            # If nothing matched, raise for visibility
-            raise ValueError(f"Unexpected OpenRouter response shape: {data}")

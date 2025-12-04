@@ -2,21 +2,21 @@
 
 A two-agent AI system for practicing and improving sales calls:
 
-- **Agent 1 (Persona)**: Sarah Chen, VP of Operations - a realistic prospect you can call and pitch to
+- **Agent 1 (Persona)**: Sarah Martinez, Operations Manager - a realistic prospect you can call and pitch to
 - **Agent 2 (Coach)**: analyzes transcripts and provides feedback
 
 ## Features
 
 - **Phone-based training**: Call in and practice your pitch on a real phone
-- **Realistic AI prospect**: Powered by OpenAI GPT-5 Chat, responds naturally with questions and objections
-- **Automatic transcription**: Twilio handles speech-to-text and text-to-speech
+- **Realistic AI prospect**: Powered by OpenRouter (default `gpt-4o-mini`), responds naturally with questions and objections
+- **Automatic transcription**: Twilio ConversationRelay streams speech-to-text, and ElevenLabs powers lifelike text-to-speech
 - **Conversation history**: All calls are saved for later review
 
 ## Tech Stack
 
 - **Backend**: Python + FastAPI
-- **Voice**: Twilio (phone, speech recognition, text-to-speech)
-- **AI**: OpenAI GPT-5 Chat API
+- **Voice**: Twilio ConversationRelay + ElevenLabs TTS
+- **AI**: OpenRouter (OpenAI-compatible) API
 - **Storage**: JSON files (easily upgradeable to SQLite/PostgreSQL)
 
 ## Prerequisites
@@ -25,7 +25,7 @@ A two-agent AI system for practicing and improving sales calls:
 2. **Twilio Account**: Sign up at https://www.twilio.com
    - Purchase a phone number with voice capabilities
    - Get your Account SID and Auth Token
-3. **OpenAI API Key**: Get from https://platform.openai.com/
+3. **OpenRouter API Key**: Get from https://openrouter.ai/
 4. **ngrok** (for development): Download from https://ngrok.com
 
 ## Installation
@@ -63,14 +63,22 @@ TWILIO_ACCOUNT_SID=your_account_sid_here
 TWILIO_AUTH_TOKEN=your_auth_token_here
 TWILIO_PHONE_NUMBER=+1234567890
 
-# OpenAI API Configuration
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-5-chat
+# OpenRouter API Configuration
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_MODEL=gpt-4o-mini
+# Optional attribution headers (populate if you have a deployed app)
+# OPENROUTER_HTTP_REFERER=https://your-site.com
+# OPENROUTER_X_TITLE=Sales Practice Agent
 
 # Application Configuration
 HOST=0.0.0.0
 PORT=8000
 BASE_URL=https://your-ngrok-url.ngrok.io  # Update after starting ngrok
+
+# Voice Configuration
+CONVERSATION_RELAY_VOICE_ID=OYTbf65OHHFELVut7v2H
+CONVERSATION_RELAY_TEXT_NORMALIZATION=on  # Optional, set to blank to disable
+CONVERSATION_RELAY_LANGUAGE=en-US
 
 # Storage Configuration
 TRANSCRIPTS_DIR=data/transcripts
@@ -143,7 +151,7 @@ sales-practice-agent/
 ├── .env                      # Environment variables (create from .env.example)
 ├── agents/
 │   ├── __init__.py
-│   └── persona.py           # Sarah persona + OpenAI integration
+│   └── persona.py           # Sarah persona + OpenRouter integration
 ├── services/
 │   ├── __init__.py
 │   ├── twilio_handler.py    # TwiML response generation
@@ -159,35 +167,34 @@ sales-practice-agent/
 ### Call Flow
 
 1. **You call** your Twilio number
-2. **Twilio** sends webhook to `/voice/incoming`
-3. **Server** creates a new Sarah persona instance
-4. **Sarah** generates a greeting via OpenAI GPT-5 Chat
-5. **Twilio** converts text to speech and plays it
-6. **Twilio** captures your speech and converts to text
-7. **Server** sends your message to Sarah (OpenAI GPT-5 Chat)
-8. **Sarah** responds naturally based on her persona
-9. **Repeat** steps 6-8 until call ends
-10. **Server** saves full transcript
+2. **Twilio** sends a webhook to `/voice/incoming`
+3. **Server** creates or resumes Sarah’s persona session and generates a greeting
+4. **Server** returns TwiML that connects the call to ConversationRelay with the ElevenLabs voice
+5. **Twilio/ElevenLabs** play the greeting back to the caller
+6. **Twilio ConversationRelay** streams caller speech to the server in real time
+7. **Server** forwards the transcript to Sarah (OpenRouter `gpt-4o-mini`) and gets her reply
+8. **Server** streams Sarah’s response back through ConversationRelay for ElevenLabs to speak
+9. **Repeat** steps 6–8 until the call ends
+10. **Server** saves the full transcript for later review
 
 ### Sarah's Persona
 
-Sarah Chen is a VP of Operations at a mid-sized manufacturing company. She:
+Sarah Martinez is the operations manager at Elite Auto Spa, a premium detailing and PPF shop. She:
 
-- Has realistic business challenges (inventory, costs, efficiency)
-- Responds naturally to sales pitches
-- Asks clarifying questions when needed
-- Raises realistic objections
-- Rewards good discovery questions
-- Becomes more resistant to pushy tactics
+- Juggles bay scheduling, inventory, and a 12-person team
+- Faces real workflow issues (technician skill gaps, scattered communication, manual tracking)
+- Responds naturally to discovery questions and realistic sales pitches
+- Raises budget, adoption, and seasonal objections when value is unclear
+- Rewards thoughtful discovery and pushes back on pushiness or vague promises
 
 You can customize her persona by editing `prompts/sarah_persona.txt`.
 
 ## API Endpoints
 
-### Voice Webhooks (Twilio)
+### Voice Interfaces (Twilio)
 
-- `POST /voice/incoming` - Handle incoming calls
-- `POST /voice/respond` - Handle conversation turns
+- `POST /voice/incoming` - Return ConversationRelay TwiML and welcome greeting
+- `WS /voice/relay` - Handle real-time ConversationRelay messages for the call
 - `POST /voice/status` - Handle call status updates
 
 ### Transcript API
@@ -242,8 +249,8 @@ INFO: Sarah response: Thanks for calling. What can I help you with?
 
 ### Sarah doesn't respond
 
-- Verify `OPENAI_API_KEY` is correct
-- Check OpenAI API quota/limits
+- Verify `OPENROUTER_API_KEY` is correct
+- Check OpenRouter status page for incidents or rate limits
 - Look for errors in server logs
 
 ### Speech recognition issues
@@ -272,7 +279,7 @@ For production:
 ## Cost Considerations
 
 - **Twilio**: ~$1/month for phone number + $0.0140/min for calls
-- **OpenAI API**: Pricing varies by model usage (see OpenAI pricing page)
+- **OpenRouter**: Pricing varies by upstream model usage (see OpenRouter pricing page)
 - **Infrastructure**: Free tier on most cloud providers for low usage
 
 A 5-minute practice call typically costs less than $0.10.
